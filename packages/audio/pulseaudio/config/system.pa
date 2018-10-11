@@ -13,19 +13,10 @@
 # General Public License for more details.
 #
 # You should have received a copy of the GNU Lesser General Public License
-# along with PulseAudio; if not, write to the Free Software Foundation,
-# Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
+# along with PulseAudio; if not, see <http://www.gnu.org/licenses/>.
 
 # This startup script is used only if PulseAudio is started in system
 # mode.
-
-### Automatically load driver modules depending on the hardware available
-.ifexists module-udev-detect.so
-load-module module-udev-detect
-.else
-### Use the static hardware detection module (for systems that lack udev/hal support)
-load-module module-detect
-.endif
 
 ### Load several protocols
 .ifexists module-esound-protocol-unix.so
@@ -43,11 +34,6 @@ load-module module-device-restore
 ### that look up the default sink/source get the right value
 load-module module-default-device-restore
 
-.ifexists module-dbus-protocol.so
-### If you want to allow TCP connections, set access to "remote" or "local,remote".
-load-module module-dbus-protocol access=local
-.endif
-
 ### Automatically move streams to the default sink if the sink they are
 ### connected to dies, similar for sources
 load-module module-rescue-streams
@@ -60,3 +46,24 @@ load-module module-suspend-on-idle
 
 ### Enable positioned event sounds
 load-module module-position-event-sounds
+
+### Automatically load modules for dbus
+.ifexists module-dbus-protocol.so
+ load-module module-dbus-protocol
+.endif
+
+### Automatically load modules for bluetooth
+.ifexists module-bluetooth-policy.so
+ load-module module-bluetooth-policy
+.endif
+
+.ifexists module-bluetooth-discover.so
+ load-module module-bluetooth-discover
+.endif
+
+.ifexists module-zeroconf-publish.so
+  load-module module-zeroconf-publish
+.endif
+
+load-module module-native-protocol-tcp auth-anonymous=1
+load-module module-switch-on-connect

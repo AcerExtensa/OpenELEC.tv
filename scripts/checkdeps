@@ -1,50 +1,74 @@
-#!/bin/sh
+#!/bin/bash
 
 ################################################################################
 #      This file is part of OpenELEC - http://www.openelec.tv
-#      Copyright (C) 2009-2012 Stephan Raue (stephan@openelec.tv)
+#      Copyright (C) 2009-2016 Stephan Raue (stephan@openelec.tv)
 #
-#  This Program is free software; you can redistribute it and/or modify
+#  OpenELEC is free software: you can redistribute it and/or modify
 #  it under the terms of the GNU General Public License as published by
-#  the Free Software Foundation; either version 2, or (at your option)
-#  any later version.
+#  the Free Software Foundation, either version 2 of the License, or
+#  (at your option) any later version.
 #
-#  This Program is distributed in the hope that it will be useful,
+#  OpenELEC is distributed in the hope that it will be useful,
 #  but WITHOUT ANY WARRANTY; without even the implied warranty of
-#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 #  GNU General Public License for more details.
 #
 #  You should have received a copy of the GNU General Public License
-#  along with OpenELEC.tv; see the file COPYING.  If not, write to
-#  the Free Software Foundation, 51 Franklin Street, Suite 500, Boston, MA 02110, USA.
-#  http://www.gnu.org/copyleft/gpl.html
+#  along with OpenELEC.  If not, see <http://www.gnu.org/licenses/>.
 ################################################################################
 
 . config/options $1
 
-deps=
-deps_pkg=
-files=
-files_pkg=
+if  [ -f /etc/lsb-release ]; then
+  DISTRO=$(grep DISTRIB_ID /etc/lsb-release | cut -d "=" -f 2 | tr A-Z a-z)
+fi
 
-case $1 in
-  get)
-    deps="wget"
-    deps_pkg="wget"
-    ;;
-  build)
-    deps="gcc g++ sed patch touch tar bzip2 gzip perl cp gawk makeinfo gperf cvs zip unzip mkfontscale diff xsltproc java"
-    deps_pkg="gcc g++ sed patch fileutils tar bzip2 gzip perl coreutils gawk texinfo gperf cvs zip unzip xutils diff xsltproc default-jre"
-    files="/usr/include/stdio.h /usr/include/ncurses.h"
-    files_pkg="libc6-dev libncurses5-dev"
-    ;;
-  qemu)
-    if [ ! `which qemu` ]; then
-      echo "Your system doesn't seem to have QEMU installed"
-      exit 1
-    fi
-    ;;
+if  [ -f /etc/os-release ]; then
+  DISTRO=$(grep ^ID= /etc/os-release | cut -d "=" -f 2 | tr A-Z a-z)
+fi
+
+deps="wget bash bc gcc sed patch tar bzip2 gzip perl gawk gperf zip unzip diff makeinfo lzop"
+deps_pkg="wget bash bc gcc sed patch tar bzip2 gzip perl gawk gperf zip unzip diffutils texinfo lzop"
+
+files="/usr/include/stdio.h /usr/include/ncurses.h"
+files_pkg="libc6-dev libncurses5-dev"
+
+case "$DISTRO" in
+    fedora|centos|rhel)
+      deps="$deps g++ mkfontscale mkfontdir bdftopcf xsltproc java"
+      deps_pkg="$deps_pkg gcc-c++ xorg-x11-font-utils xorg-x11-font-utils xorg-x11-font-utils libxslt java-1.7.0-openjdk"
+      [[ ! `rpm -qa glibc-static` ]] && deps="$deps glibc-static" && deps_pkg="$deps_pkg glibc-static"
+      [[ ! `rpm -qa libstdc++-static` ]] && deps="$deps libstdc++-static" && deps_pkg="$deps_pkg libstdc++-static"
+      files_pkg="glibc-headers ncurses-devel"
+      ;;
+    gentoo)
+      deps="$deps g++ mkfontscale mkfontdir bdftopcf xsltproc java"
+      deps_pkg="$deps_pkg gcc[cxx] mkfontscale mkfontdir bdftopcf libxslt virtual/jre"
+      files_pkg="glibc ncurses"
+      ;;
+    arch)
+      deps="$deps g++ mkfontscale mkfontdir bdftopcf xsltproc java"
+      deps_pkg="$deps_pkg g++ xorg-mkfontscale xorg-mkfontdir xorg-bdftopcf libxslt java-runtime-common"
+      ;;
+    opensuse)
+      deps="$deps g++ mkfontscale mkfontdir bdftopcf xsltproc java"
+      deps_pkg="$deps_pkg gcc-c++ mkfontscale mkfontdir bdftopcf libxslt-tools java-1_8_0-openjdk"
+      [[ ! `rpm -qa glibc-devel-static` ]] && deps="$deps glibc-devel-static" && deps_pkg="$deps_pkg glibc-devel-static"
+      ;;
+    *)
+      deps="$deps g++ mkfontscale mkfontdir bdftopcf xsltproc java"
+      deps_pkg="$deps_pkg g++ xfonts-utils xfonts-utils xfonts-utils xsltproc default-jre"
+      ;;
 esac
+
+# project specific dependencies
+if [ -n "$EXTRA_DEPS" ] ; then
+  deps="$deps $EXTRA_DEPS"
+fi
+if [ -n "$EXTRA_DEPS_PKG" ] ; then
+  deps_pkg="$deps_pkg $EXTRA_DEPS_PKG"
+fi
 
 getarg() {
   eval echo \${$(($1+2))}
@@ -63,62 +87,41 @@ while file=`getarg $i $files` && [ -n "$file" ]; do
 done
 
 if [ -n "$need" ]; then
-  echo "**** Your system lacks the following tools needed to $1 $DISTRONAME ****"
+  echo "**** Your system lacks the following tools needed to build $DISTRONAME ****"
   echo $need
+  echo "**** You seem to use a $DISTRO system ****"
 
-  if  [ -f /etc/lsb-release ]; then
-    DISTRO=$(grep DISTRIB_ID /etc/lsb-release | cut -d "=" -f 2)
-  fi
-
-  if [ "$DISTRO" = "Ubuntu" ]; then
-    echo "**** You seem to use a $DISTRO system ****"
-    read -p "would you like to install the needed tools ? (y/n) " ans
-    if ( ! [ -z "`which aptitude 2>/dev/null`" ] && [ "$ans" = "y" ]); then
-      sudo aptitude install $need_pkg
-    elif [ "$ans" = "y" ]; then
-      echo "**** The recommended Package-Manager Aptitude is not installed"
-      read -p "(y) install Aptitude :: (n) use APT " ans
-      if [ "$ans" = "y" ]; then
-        sudo apt-get -y install aptitude
-        sudo aptitude install $need_pkg
-      elif [ "$ans" = "n" ]; then
-        sudo apt-get install $need_pkg
-      else
-        echo "********"
-        exit 1
-      fi
-    else
-      echo "********"
+  case "$DISTRO" in
+    ubuntu|debian|linuxmint)
+      read -p "would you like to install the needed tools ? (y/n) " ans
+      [ "$ans" = "y" ] && sudo apt-get install $need_pkg
+      ;;
+    fedora|centos|rhel)
+      if [ `which dnf` ]; then YUM=dnf; else YUM=yum; fi
+      read -p "would you like to install the needed tools ? (y/n) " ans
+      [ "$ans" = "y" ] && sudo $YUM install $need_pkg
+      ;;
+    gentoo)
+      read -p "would you like to install the needed tools ? (y/n) " ans
+      [ "$ans" = "y" ] && sudo emerge --ask --deep $need_pkg
+      ;;
+    mageia)
+      read -p "would you like to install the needed tools ? (y/n) " ans
+      [ "$ans" = "y" ] && sudo urpmi $need_pkg
+      ;;
+    arch)
+      read -p "would you like to install the needed tools ? (y/n) " ans
+      [ "$ans" = "y" ] && sudo pacman -Sy $need_pkg
+      ;;
+    opensuse)
+      read -p "would you like to install the needed tools ? (y/n) " ans
+      [ "$ans" = "y" ] && sudo zypper install -y --no-recommends $need_pkg
+      ;;
+    *)
+      echo "**** unsupported distro $DISTRO ****"
       exit 1
-    fi
-  elif ( ! [ -z "`which aptitude 2>/dev/null`" ]); then
-   DISTRO="a Debian" 
-   echo "**** You seem to use $DISTRO system ****"
-    read -p "would you like to install the needed tools ? (y/n) " ans
-    if ([ "$ans" = "y" ] && ! [ $(sudo -n uptime 2>&1|grep "load"|wc -l) ]); then
-      sudo aptitude install $need_pkg
-    elif [ "$ans" = "y" ]; then
-      su -c "aptitude install $need_pkg"
-    else
-      echo "********"
-      exit 1
-    fi
-  elif [ -f /etc/mandrake-release -a -n "`which urpmi 2>/dev/null`" ]; then
-    echo "**** You seem to use a mandrake system ****"
-    read -p "would you like to install the needed tools ? (y/n) " ans
-    [ "$ans" = "y" ] && sudo urpmi $need_pkg
-  elif [ -f /etc/gentoo-release -a -n "`which emerge 2>/dev/null`" ]; then
-    echo "**** You seem to use a gentoo system ****"
-    read -p "would you like to install the needed tools ? (y/n) " ans
-    [ "$ans" = "y" ] && sudo emerge -D $need_pkg
-  elif [ -f /etc/fedora-release -a -n "`which yum 2>/dev/null`" ]; then
-    echo "**** You seem to use a fedora system ****"
-    read -p "would you like to install the needed tools ? (y/n) " ans
-    [ "$ans" = "y" ] && sudo yum install $need_pkg
-  else
-    echo "********"
-    exit 1
-  fi
+      ;;
+  esac
 fi
 
 
